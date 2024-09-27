@@ -39,17 +39,42 @@ pheval run --input-dir /path/to/input_dir \
 
 # Benchmark
 
-You can benchmark the run with the `pheval-utils benchmark` command:
+You can benchmark the run with the `pheval-utils generate-benchmark-stats` command:
 
 ```bash
-pheval-utils benchmark --directory /path/to/output_directoy \
---phenopacket-dir /path/to/phenopacket_dir \
---output-prefix OUTPUT_PREFIX \
---gene-analysis \
---plot-type bar_cumulative
+pheval-utils generate-benchmark-stats --run-yaml /path/to/runs.yaml \
 ```
 
-The path provided to the `--directory` parameter should be the same as the one provided to the `--output-dir` in the `pheval run` command
+The path provided to the `---run-yaml` parameter should be the path to the YAML  configuration file for running the benchmark, it may be formatted like so:
+
+```yaml
+benchmark_name: pheval_template_benchmark
+runs:
+  - run_identifier: template_runner
+    results_dir: /path/to/results_dir # Should be the same directory specified as the --output-dir in the pheval run command
+    phenopacket_dir: /path/to/phenopacket_dir
+    gene_analysis: True
+    variant_analysis: False
+    disease_analysis: False
+    threshold:
+    score_order: descending
+plot_customisation:
+  gene_plots:
+    plot_type: bar_cumulative
+    rank_plot_title: PhEval Template Recall Performance
+    roc_curve_title: PhEval Template ROC Curve
+    precision_recall_title: PhEval Template PR Curve
+  disease_plots:
+    plot_type:
+    rank_plot_title:
+    roc_curve_title: 
+    precision_recall_title: 
+  variant_plots:
+    plot_type:
+    rank_plot_title: 
+    roc_curve_title: 
+    precision_recall_title:
+```
 
 # Personalising to your own tool
 
