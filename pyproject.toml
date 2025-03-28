@@ -7,8 +7,8 @@ readme = "README.md"
 packages = [{include = "pheval_template", from = "src"}]
 
 [tool.poetry.dependencies]
-python = ">=3.9,<4.0.0"
-pheval = ">=0.3.2, <0.5.0"
+python = ">=3.10,<4.0.0"
+pheval = "^0.5.2"
 
 
 [tool.poetry.plugins."pheval.plugins"]
