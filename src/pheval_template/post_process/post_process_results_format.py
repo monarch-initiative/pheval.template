@@ -1,13 +1,12 @@
-import json
 from pathlib import Path
-from typing import List
 
-from pheval.post_processing.post_processing import PhEvalGeneResult, generate_pheval_result
+import polars as pl
+from pheval.post_processing.post_processing import SortOrder, generate_gene_result
 from pheval.utils.file_utils import all_files
-from pheval.utils.phenopacket_utils import GeneIdentifierUpdater, create_hgnc_dict
+from pheval.utils.phenopacket_utils import GeneIdentifierUpdater, create_gene_identifier_map
 
 
-def read_raw_result(raw_result_path: Path) -> List[dict]:
+def read_raw_result(raw_result_path: Path) -> pl.DataFrame:
     """
     Read the raw result file.
 
@@ -15,105 +14,56 @@ def read_raw_result(raw_result_path: Path) -> List[dict]:
         raw_result_path(Path): Path to the raw result file.
 
     Returns:
-        List[dict]: Contents of the raw result file.
+        pl.DataFrame: Contents of the raw result file.
     """
-    with open(raw_result_path) as raw_result:
-        raw_result_data = json.load(raw_result)
-    raw_result.close()
-    return raw_result_data
+    return pl.read_json(raw_result_path)
 
 
-class ConvertToPhEvalResult:
-    """Class to convert the raw result file to PhEvalGeneResult."""
+def extract_gene_results(
+    raw_results: pl.DataFrame, gene_identifier_updater: GeneIdentifierUpdater
+) -> pl.DataFrame:
+    """
+    Extract gene results from raw results.
+    Args:
+        raw_results (pl.DataFrame): Raw results.
+        gene_identifier_updater (GeneIdentifierUpdater): GeneIdentifierUpdater.
 
-    def __init__(self, raw_result: List[dict], gene_identifier_updator: GeneIdentifierUpdater):
-        """
-        Initialise the ConvertToPhEvalResult class.
-
-        Args:
-            raw_result (List[dict]): Contents of the raw result file.
-            gene_identifier_updator (GeneIdentifierUpdater): GeneIdentifierUpdater object.
-
-        """
-        self.raw_result = raw_result
-        self.gene_identifier_updator = gene_identifier_updator
-
-    @staticmethod
-    def _obtain_score(result_entry: dict) -> float:
-        """
-        Obtain the score from the result entry.
-
-        Args:
-            result_entry (dict): Contents of the result entry.
-
-        Returns:
-            float: The score.
-        """
-        return result_entry["score"]
-
-    @staticmethod
-    def _obtain_gene_symbol(result_entry: dict) -> str:
-        """
-        Obtain the gene symbol from the result entry.
-
-        Args:
-            result_entry (dict): Contents of the result entry.
-
-        Returns:
-            str: The gene symbol.
-        """
-        return result_entry["gene_symbol"]
-
-    def obtain_gene_identifier(self, result_entry: dict) -> str:
-        """
-        Obtain the gene identifier from the result entry.
-
-        Args:
-            result_entry (dict): Contents of the result entry.
-
-        Returns:
-            str: The gene identifier.
-        """
-        return self.gene_identifier_updator.find_identifier(self._obtain_gene_symbol(result_entry))
-
-    def extract_pheval_gene_requirements(self) -> List[PhEvalGeneResult]:
-        """
-        Extract the data required to produce PhEval gene output.
-
-        Returns:
-            List[PhEvalGeneResult]: List of PhEvalGeneResult objects.
-        """
-        pheval_result = []
-        for result_entry in self.raw_result:
-            pheval_result.append(
-                PhEvalGeneResult(
-                    gene_symbol=self._obtain_gene_symbol(result_entry),
-                    gene_identifier=self.obtain_gene_identifier(result_entry),
-                    score=self._obtain_score(result_entry),
-                )
-            )
-        return pheval_result
+    Returns:
+        pl.DataFrame: Extracted gene results.
+    """
+    return raw_results.select(
+        [
+            pl.col("gene_symbol").cast(pl.String),
+            pl.col("gene_symbol")
+            .map_elements(gene_identifier_updater.find_identifier, return_dtype=pl.String)
+            .alias("gene_identifier")
+            .cast(pl.String),
+            pl.col("score").cast(pl.Float64),
+        ]
+    )
 
 
-def create_standardised_results(raw_results_dir: Path, output_dir: Path) -> None:
+def create_standardised_results(
+    raw_results_dir: Path, output_dir: Path, phenopacket_dir: Path
+) -> None:
     """
     Create PhEval gene tsv output from raw results.
 
     Args:
-        raw_results_dir (Path): Path to the raw results directory.
+        raw_results_dir (Path): Path to the raw result directory.
         output_dir (Path): Path to the output directory.
+        phenopacket_dir (Path): Path to the phenopackets directory.
     """
-    gene_identifier_updator = GeneIdentifierUpdater(
-        gene_identifier="ensembl_id", hgnc_data=create_hgnc_dict()
+    gene_identifier_updater = GeneIdentifierUpdater(
+        gene_identifier="ensembl_id", identifier_map=create_gene_identifier_map()
     )
     for raw_result_path in all_files(raw_results_dir):
         raw_result = read_raw_result(raw_result_path)
-        pheval_result = ConvertToPhEvalResult(
-            raw_result, gene_identifier_updator
-        ).extract_pheval_gene_requirements()
-        generate_pheval_result(
-            pheval_result=pheval_result,
-            sort_order_str="DESCENDING",
+        pheval_result = extract_gene_results(raw_result, gene_identifier_updater)
+        generate_gene_result(
+            results=pheval_result,
             output_dir=output_dir,
-            tool_result_path=raw_result_path,
+            sort_order=SortOrder.DESCENDING,
+            result_path=raw_result_path,
+            phenopacket_dir=phenopacket_dir,
         )
