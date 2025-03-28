@@ -34,4 +34,8 @@ class TemplatePhEvalRunner(PhEvalRunner):
         Post-process the raw output into PhEval standardised TSV output.
         """
         print("post processing results to PhEval standardised TSV output.")
-        post_process(raw_results_dir=self.raw_results_dir, output_dir=self.output_dir)
+        post_process(
+            raw_results_dir=self.raw_results_dir,
+            output_dir=self.output_dir,
+            phenopacket_dir=self.testdata_dir.joinpath("phenopackets"),
+        )
